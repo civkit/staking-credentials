@@ -1,0 +1,16 @@
+[package]
+name = "staking_credentials"
+description = "An implementaiton of the Staking Credentials framework"
+version = "0.1.0"
+authors = ["Antoine Riard <dev@ariard.me>"]
+license = "MIT OR Apache-2.0"
+keyswords = [ "lightning", "bitcoin", "jamming" ]
+readme = "README.md"
+edition = "2018"
+
+[features]
+std = ["bitcoin/std"]
+default = ["std"]
+
+[dependencies]
+bitcoin = { version = "0.29.0", default-features = false, features = ["secp-recovery"] }
