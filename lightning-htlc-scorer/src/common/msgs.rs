@@ -7,8 +7,8 @@
 // You may not use this file except in accordance with one or both of these
 // licenses.
 
-//! A new BOLT7 gossip message CredentialPolicy to announce one's liquidity
-//! risk-management policy to the rest of the Lightning network.
+//! A gossip extension message CredentialPolicy to announce one's base collateral
+//! acceptance and credential issuance policy to the rest of the Lightning network.
 //!
 //! The policy has a timestamp, a list of accepted asset proofs, a list of accepted
 //! credentials, the `asset-to-credential` ratio and the expiration height of
@@ -16,6 +16,8 @@
 //!
 //! A list of `credentials-to-liquidity-unit` per-Contract-Provider covered can
 //! be attached.
+
+use bitcoin::secp256k1::PublicKey;
 
 /// The unsigned part of a credential_policy message.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -32,4 +34,29 @@ pub struct UnsignedCredentialPolicy {
 pub struct CredentialPolicy {
 	pub signature: Signature,
 	pub contents: UnsignedCredentialPolicy,
+}
+
+//! A gossip extension message ContractCoveragePolicy to annnounce one per-contract
+//! liquidity policy to the rest of the Lightning network.
+//!
+//! The policy has a timestamp, a list of authoritative credential issuers and
+//! a list of contract covered, each with a unique `credential-to-liquidity` ratio.
+//!
+//! In the future, as we extend the Staking Credentials framework with non-monetary
+//! paradigm, a contract coverage could be made of credentials from different paradigm.
+
+/// The unsigned part of a contract_policy message.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnsignedContractCoveragePolicy {
+	pub timestamp: u32,
+	pub credential_issuers: Vec<PublicKey>,
+	pub contract_covered: Vec<ContractTemplate>, // should have identifier + credential-to-liquidity-unit
+	pub expiration_height: u32,
+}
+
+/// A contract_policy message to be sent or received from a peer.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ContractCoveragePolicy {
+	pub signature: Signature,
+	pub contents: UnsignedContractCoveragePolicy,
 }
