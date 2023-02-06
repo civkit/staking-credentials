@@ -1,6 +1,6 @@
 [package]
-name = "lightning-htlc-scorer"
-description = "Process the jamming risk of forward HTLC"
+name = "Staking Credentials"
+description = "An implementaiton of the Staking Credentials framework"
 version = "0.1.0"
 authors = ["Antoine Riard <dev@ariard.me>"]
 documentation = "https://docs.rs/lightning-htlc-scorer"
