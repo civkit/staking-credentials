@@ -31,4 +31,20 @@ impl CommitManager {
 			default_configuration: RiskEngineConfig::default(),
 		}
 	}
+
+	pub fn register_collateral(fresh_collaterals: Vec<CollateralAsset>) {
+
+		for collateral in fresh_collaterals {
+			match {
+				CollateralAsset::OnchainPayment => { self.fresh_onchain_txids },
+				CollateralAsset::OffchainPayment => { self.fresh_invoivec_hashes },
+			}
+		}
+
+		//TODO: error if already existent
+	}
+
+	pub fn get_credentials_authentication_request() -> Result<RequestCredentialsAuthentication, StakingCredentialsIssuanceError> {
+	
+	}
 }
