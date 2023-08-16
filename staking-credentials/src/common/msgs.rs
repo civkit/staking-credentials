@@ -20,11 +20,13 @@ use bitcoin::secp256k1::PublicKey;
 use bitcoin::secp256k1::ecdsa::Signature;
 
 /// A set of flags bits for scarce assets proofs accepted.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AssetProofFeatures {
 	flags: Vec<u8>,
 }
 
 ///A set of flags bit for credentials cryptosystems supported.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CredentialsFeatures {
 	flags: Vec<u8>,
 }
@@ -47,10 +49,10 @@ pub struct CredentialPolicy {
 	pub contents: UnsignedCredentialPolicy,
 }
 
-//! A gossip extension message ServicePolicy to annnounce one per-service providance policy.
-//!
-//! The policy has a timestamp, a list of authoritative credential issuers and
-//! a list of service covered, each with a unique `credentials-to-service` ratio.
+/// A gossip extension message ServicePolicy to annnounce one per-service providance policy.
+///
+/// The policy has a timestamp, a list of authoritative credential issuers and
+/// a list of service covered, each with a unique `credentials-to-service` ratio.
 
 /// The unsigned part of a service_policy message.
 #[derive(Clone, Debug, PartialEq, Eq)]
