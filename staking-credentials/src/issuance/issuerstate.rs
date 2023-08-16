@@ -10,6 +10,9 @@
 use bitcoin::secp256k1::PublicKey;
 use bitcoin::secp256k1::ecdsa::Signature;
 
+use crate::common::utils::Credentials;
+use crate::common::msgs::{AssetProofFeatures, CredentialsFeatures};
+
 struct IssuerState {
 	asset_flags: AssetProofFeatures,
 	credentials_flags: CredentialsFeatures,

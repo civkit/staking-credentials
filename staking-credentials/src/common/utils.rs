@@ -9,6 +9,4 @@
 
 /// A privacy-preserving authenticator that is used for authorization.
 
-struct Credentials([u8; 32]);
-
-
+pub struct Credentials([u8; 32]);
