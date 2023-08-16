@@ -7,7 +7,4 @@
 // You may not use this file except in accordance with one or both of these
 // licenses.
 
-#![crate_name = "staking_credentials"]
-
-pub mod common;
-pub mod issuance;
+pub mod issuerstate;
