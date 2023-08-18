@@ -7,30 +7,24 @@
 // You may not use this file except in accordance with one or both of these
 // licenses.
 
-use bitcoin::secp256k1::PublicKey;
-use bitcoin::secp256k1::ecdsa::Signature;
-
-use crate::common::utils::Credentials;
+use crate::common::util::Credentials;
 use crate::common::msgs::{AssetProofFeatures, CredentialsFeatures};
 
-pub struct IssuerState {
+pub struct RequesterState {
 	asset_flags: AssetProofFeatures,
 	credentials_flags: CredentialsFeatures,
-	issuance_pubkey: PublicKey,
 }
 
-impl IssuerState {
-	pub fn new(asset_flags: AssetProofFeatures, credentials_flags: CredentialsFeatures, pubkey: PublicKey) -> Self {
-		IssuerState {
+impl RequesterState {
+	pub fn new (asset_flags: AssetProofFeatures, credentials_flags: CredentialsFeatures) -> RequesterState {
+		RequesterState {
 			asset_flags: asset_flags,
 			credentials_flags: credentials_flags,
-			issuance_pubkey: pubkey,
 		}
 	}
 
-	pub fn verify_asset_proofs() -> Result<Vec<(Credentials, Signature)>, ()> {
-		//TODO: verify if credential is supported
-		//TODO: generate signature
+	pub fn generate_credentials(credentials_quantity: u32) -> Result<Vec<(Credentials)>, ()> {
+		//TODO: generate credentials according to issuance policy
 		return Err(());
 	}
 }
