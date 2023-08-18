@@ -7,7 +7,7 @@
 // You may not use this file except in accordance with one or both of these
 // licenses.
 
-use crate::common::util::Credentials;
+use crate::common::utils::Credentials;
 use crate::common::msgs::{AssetProofFeatures, CredentialsFeatures};
 
 pub struct RequesterState {
