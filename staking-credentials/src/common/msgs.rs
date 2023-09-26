@@ -27,10 +27,22 @@ pub struct AssetProofFeatures {
 	flags: Vec<u8>,
 }
 
+impl AssetProofFeatures {
+	fn new(flags: Vec<u8>) -> Self {
+		AssetProofFeatures { flags }
+	}
+}
+
 ///A set of flags bit for credentials cryptosystems supported.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CredentialsFeatures {
 	flags: Vec<u8>,
+}
+
+impl CredentialsFeatures {
+	fn new(flags: Vec<u8>) -> Self {
+		CredentialsFeatures { flags }
+	}
 }
 
 /// The unsigned part of a credential_policy message.
