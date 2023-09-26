@@ -28,7 +28,7 @@ pub struct AssetProofFeatures {
 }
 
 impl AssetProofFeatures {
-	fn new(flags: Vec<u8>) -> Self {
+	pub fn new(flags: Vec<u8>) -> Self {
 		AssetProofFeatures { flags }
 	}
 }
@@ -40,7 +40,7 @@ pub struct CredentialsFeatures {
 }
 
 impl CredentialsFeatures {
-	fn new(flags: Vec<u8>) -> Self {
+	pub fn new(flags: Vec<u8>) -> Self {
 		CredentialsFeatures { flags }
 	}
 }
