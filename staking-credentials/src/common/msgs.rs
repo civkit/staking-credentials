@@ -19,6 +19,8 @@
 use bitcoin::secp256k1::PublicKey;
 use bitcoin::secp256k1::ecdsa::Signature;
 
+use crate::common::utils::{Credentials, Proof};
+
 /// A set of flags bits for scarce assets proofs accepted.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AssetProofFeatures {
@@ -69,4 +71,42 @@ pub struct UnsignedServicePolicy {
 pub struct ServicePolicy {
 	pub signature: Signature,
 	pub contents: UnsignedServicePolicy,
+}
+
+/// A credential authentication request sent by a peer.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct CredentialAuthenticationPayload {
+	pub proof: Proof,
+	pub credentials: Vec<Credentials>,
+}
+
+impl CredentialAuthenticationPayload {
+	fn new(proof: Proof, credentials: Vec<Credentials>) -> Self {
+		CredentialAuthenticationPayload {
+			proof,
+			credentials,
+		}
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use bitcoin::Txid;
+	use bitcoin::hashes::{Hash, HashEngine};
+
+	use crate::common::utils::{Credentials, Proof};
+	use crate::common::msgs::CredentialAuthenticationPayload;
+
+	#[test]
+	fn test_credential_authentication() {
+		let bytes = [32;32];
+		let mut enc = Txid::engine();
+		enc.input(&bytes);
+		let txid = Txid::from_engine(enc);
+
+		let proof = Proof::Txid(txid);
+		let credentials = vec![Credentials([16;32])];
+
+		let mut credential_authentication = CredentialAuthenticationPayload::new(proof, credentials);
+	}
 }
