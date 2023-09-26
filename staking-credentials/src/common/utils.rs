@@ -9,4 +9,11 @@
 
 /// A privacy-preserving authenticator that is used for authorization.
 
-pub struct Credentials([u8; 32]);
+use bitcoin::Txid;
+
+pub struct Credentials(pub [u8; 32]);
+
+#[derive(Debug)]
+pub enum Proof {
+	Txid(Txid),
+}
