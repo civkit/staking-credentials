@@ -101,13 +101,64 @@ impl CredentialAuthenticationPayload {
 	}
 }
 
+/// A credential authentication result sent by a peer.
+pub struct CredentialAuthenticationResult {
+	//TODO: do we need to send back credentials, bandwidth savings by agreeing on ordering ?
+	pub signatures: Vec<Signature>,
+}
+
+impl CredentialAuthenticationResult {
+	fn new(signatures: Vec<Signature>) -> Self {
+		CredentialAuthenticationResult {
+			signatures,
+		}
+	}
+}
+
+/// A service deliverance request attached with unblinded authenticated credential sent by a peer.
+pub struct ServiceDeliveranceRequest {
+	pub credentials: Vec<Credentials>,
+	pub signatures: Vec<Signature>,
+	pub service_id: u64,
+	pub commitment_sig: Signature,
+}
+
+impl ServiceDeliveranceRequest {
+	fn new(credentials: Vec<Credentials>, signatures: Vec<Signature>, service_id: u64, commitment_sig: Signature) -> Self {
+		ServiceDeliveranceRequest {
+			credentials,
+			signatures,
+			service_id,
+			commitment_sig
+		}
+	}
+}
+
+/// A service deliverance result sent by a peer.
+pub struct ServiceDeliveranceResult {
+	pub service_id: u64,
+	pub ret: bool,
+	pub reason: Vec<u8>,
+}
+
+impl ServiceDeliveranceResult {
+	fn new(service_id: u64, ret: bool, reason: Vec<u8>) -> Self {
+		ServiceDeliveranceResult {
+			service_id,
+			ret,
+			reason
+		}
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use bitcoin::Txid;
-	use bitcoin::hashes::{Hash, HashEngine};
+	use bitcoin::hashes::{Hash, sha256, HashEngine};
+	use bitcoin::secp256k1::{ecdsa, Message, PublicKey, Secp256k1, SecretKey};
 
 	use crate::common::utils::{Credentials, Proof};
-	use crate::common::msgs::CredentialAuthenticationPayload;
+	use crate::common::msgs::{CredentialAuthenticationPayload, CredentialAuthenticationResult, ServiceDeliveranceRequest};
 
 	#[test]
 	fn test_credential_authentication() {
@@ -120,5 +171,36 @@ mod test {
 		let credentials = vec![Credentials([16;32])];
 
 		let mut credential_authentication = CredentialAuthenticationPayload::new(proof, credentials);
+	}
+
+	#[test]
+	fn test_credential_result() {
+		let signatures = vec![];
+
+		let mut credential_authentication_result = CredentialAuthenticationResult::new(signatures);
+	}
+
+	#[test]
+	fn test_service_deliverance_request() {
+		let credentials = vec![];
+		let signatures = vec![];
+		let service_id = 0;
+
+		let secp = Secp256k1::new();
+
+		let msg = b"This is some message";
+
+		let seckey = [
+			59, 148, 11, 85, 134, 130, 61, 253, 2, 174, 59, 70, 27, 180, 51, 107, 94, 203, 174, 253,
+			102, 39, 170, 146, 46, 252, 4, 143, 236, 12, 136, 28,
+		];
+
+		let hash_msg = sha256::Hash::hash(msg);
+		let msg = Message::from_slice(hash_msg.as_ref()).unwrap();
+		let seckey = SecretKey::from_slice(&seckey).unwrap();
+
+		let commitment_sig = secp.sign_ecdsa(&msg, &seckey);
+
+		let mut service_deliverance_request = ServiceDeliveranceRequest::new(credentials, signatures, service_id, commitment_sig);
 	}
 }
