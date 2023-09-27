@@ -93,7 +93,7 @@ pub struct CredentialAuthenticationPayload {
 }
 
 impl CredentialAuthenticationPayload {
-	fn new(proof: Proof, credentials: Vec<Credentials>) -> Self {
+	pub fn new(proof: Proof, credentials: Vec<Credentials>) -> Self {
 		CredentialAuthenticationPayload {
 			proof,
 			credentials,
@@ -108,7 +108,7 @@ pub struct CredentialAuthenticationResult {
 }
 
 impl CredentialAuthenticationResult {
-	fn new(signatures: Vec<Signature>) -> Self {
+	pub fn new(signatures: Vec<Signature>) -> Self {
 		CredentialAuthenticationResult {
 			signatures,
 		}
@@ -124,7 +124,7 @@ pub struct ServiceDeliveranceRequest {
 }
 
 impl ServiceDeliveranceRequest {
-	fn new(credentials: Vec<Credentials>, signatures: Vec<Signature>, service_id: u64, commitment_sig: Signature) -> Self {
+	pub fn new(credentials: Vec<Credentials>, signatures: Vec<Signature>, service_id: u64, commitment_sig: Signature) -> Self {
 		ServiceDeliveranceRequest {
 			credentials,
 			signatures,
@@ -142,7 +142,7 @@ pub struct ServiceDeliveranceResult {
 }
 
 impl ServiceDeliveranceResult {
-	fn new(service_id: u64, ret: bool, reason: Vec<u8>) -> Self {
+	pub fn new(service_id: u64, ret: bool, reason: Vec<u8>) -> Self {
 		ServiceDeliveranceResult {
 			service_id,
 			ret,
@@ -158,7 +158,7 @@ mod test {
 	use bitcoin::secp256k1::{ecdsa, Message, PublicKey, Secp256k1, SecretKey};
 
 	use crate::common::utils::{Credentials, Proof};
-	use crate::common::msgs::{CredentialAuthenticationPayload, CredentialAuthenticationResult, ServiceDeliveranceRequest};
+	use crate::common::msgs::{CredentialAuthenticationPayload, CredentialAuthenticationResult, ServiceDeliveranceRequest, ServiceDeliveranceResult};
 
 	#[test]
 	fn test_credential_authentication() {
@@ -202,5 +202,14 @@ mod test {
 		let commitment_sig = secp.sign_ecdsa(&msg, &seckey);
 
 		let mut service_deliverance_request = ServiceDeliveranceRequest::new(credentials, signatures, service_id, commitment_sig);
+	}
+
+	#[test]
+	fn test_service_deliverance_result() {
+		let service_id = 0;
+		let ret = false;
+		let reason = vec![];
+
+		let mut service_deliverance_result = ServiceDeliveranceResult::new(service_id, ret, reason);
 	}
 }
