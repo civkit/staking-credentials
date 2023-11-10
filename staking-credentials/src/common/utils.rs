@@ -9,11 +9,20 @@
 
 /// A privacy-preserving authenticator that is used for authorization.
 
-use bitcoin::Txid;
+use bitcoin::{Txid, MerkleBlock};
 
 pub struct Credentials(pub [u8; 32]);
+
+impl Credentials {
+	pub fn serialize(&self) -> Vec<u8> {
+		let mut vec = Vec::with_capacity(32);
+		vec.copy_from_slice(&self.0);
+		vec
+	}
+}
 
 #[derive(Debug)]
 pub enum Proof {
 	Txid(Txid),
+	MerkleBlock(MerkleBlock),
 }

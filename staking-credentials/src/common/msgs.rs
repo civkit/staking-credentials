@@ -16,10 +16,18 @@
 //!
 //! A list of `credentials-to-service-unit` per-Provider covered can be attached.
 
+use bitcoin::consensus::serialize;
 use bitcoin::secp256k1::PublicKey;
 use bitcoin::secp256k1::ecdsa::Signature;
 
+
 use crate::common::utils::{Credentials, Proof};
+
+use std::io;
+
+pub trait Encodable {
+	fn encode<W: io::Write + ?Sized>(&self, writer: &mut W) -> Result<usize, io::Error>;
+}
 
 /// A set of flags bits for scarce assets proofs accepted.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -101,6 +109,19 @@ impl CredentialAuthenticationPayload {
 	}
 }
 
+impl Encodable for CredentialAuthenticationPayload {
+	fn encode<W: io::Write + ?Sized>(&self, w: &mut W) -> Result<usize, io::Error> {
+		let mut len = match &self.proof {
+			Proof::Txid(txid) => { w.write(&serialize(&txid))? },
+			Proof::MerkleBlock(mb) => { w.write(&serialize(&mb))? },
+		};
+		for c in &self.credentials {
+			len += w.write(&c.serialize())?;
+		}
+		Ok(len)
+	}
+}
+
 /// A credential authentication result sent by a peer.
 pub struct CredentialAuthenticationResult {
 	//TODO: do we need to send back credentials, bandwidth savings by agreeing on ordering ?
@@ -154,6 +175,7 @@ impl ServiceDeliveranceResult {
 #[cfg(test)]
 mod test {
 	use bitcoin::Txid;
+	use bitcoin::consensus::Encodable;
 	use bitcoin::hashes::{Hash, sha256, HashEngine};
 	use bitcoin::secp256k1::{ecdsa, Message, PublicKey, Secp256k1, SecretKey};
 
@@ -171,6 +193,7 @@ mod test {
 		let credentials = vec![Credentials([16;32])];
 
 		let mut credential_authentication = CredentialAuthenticationPayload::new(proof, credentials);
+		//credential_authentication.encode();
 	}
 
 	#[test]
@@ -212,4 +235,5 @@ mod test {
 
 		let mut service_deliverance_result = ServiceDeliveranceResult::new(service_id, ret, reason);
 	}
+
 }
