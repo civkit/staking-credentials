@@ -29,6 +29,10 @@ pub trait Encodable {
 	fn encode<W: io::Write + ?Sized>(&self, writer: &mut W) -> Result<usize, io::Error>;
 }
 
+pub trait Decodable: Sized {
+	fn decode<R: io::Read + ?Sized>(reader: &mut R) -> Result<Self, io::Error>;
+}
+
 /// A set of flags bits for scarce assets proofs accepted.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AssetProofFeatures {
@@ -121,6 +125,12 @@ impl Encodable for CredentialAuthenticationPayload {
 		Ok(len)
 	}
 }
+
+//impl Decodable for CredentialAuthenticationPayload {
+//	fn decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, encode::Error> {
+//		let mb: MerkleBlock = deserialize(&r);
+//		//let proof: = deserialize(&r)
+	
 
 /// A credential authentication result sent by a peer.
 pub struct CredentialAuthenticationResult {
