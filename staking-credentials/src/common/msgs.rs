@@ -20,6 +20,7 @@ use bitcoin::consensus::serialize;
 use bitcoin::secp256k1::PublicKey;
 use bitcoin::secp256k1::ecdsa::Signature;
 
+use bitcoin::MerkleBlock;
 
 use crate::common::utils::{Credentials, Proof};
 
@@ -27,6 +28,10 @@ use std::io;
 
 pub trait Encodable {
 	fn encode<W: io::Write + ?Sized>(&self, writer: &mut W) -> Result<usize, io::Error>;
+}
+
+pub trait Decodable: Sized {
+	fn decode<R: io::Read + ?Sized>(data: &[u8]) -> Result<Self, ()>;
 }
 
 /// A set of flags bits for scarce assets proofs accepted.
@@ -119,6 +124,21 @@ impl Encodable for CredentialAuthenticationPayload {
 			len += w.write(&c.serialize())?;
 		}
 		Ok(len)
+	}
+}
+
+impl Decodable for CredentialAuthenticationPayload {
+	fn decode<R: io::Read + ?Sized>(data: &[u8]) -> Result<Self, ()> {
+		let mb: Result<MerkleBlock, bitcoin::consensus::encode::Error> = bitcoin::consensus::deserialize(&data);
+		if let Ok(mb) = mb {
+			let proof = Proof::MerkleBlock(mb);
+			//TODO: deserialize credentials
+			return Ok(CredentialAuthenticationPayload {
+				proof,
+				credentials: vec![],
+			})
+		}
+		return Err(());
 	}
 }
 
