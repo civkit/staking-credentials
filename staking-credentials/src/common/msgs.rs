@@ -31,7 +31,7 @@ pub trait Encodable {
 }
 
 pub trait Decodable: Sized {
-	fn decode<R: io::Read + ?Sized>(data: &[u8]) -> Result<Self, ()>;
+	fn decode(data: &[u8]) -> Result<Self, ()>;
 }
 
 /// A set of flags bits for scarce assets proofs accepted.
@@ -128,7 +128,7 @@ impl Encodable for CredentialAuthenticationPayload {
 }
 
 impl Decodable for CredentialAuthenticationPayload {
-	fn decode<R: io::Read + ?Sized>(data: &[u8]) -> Result<Self, ()> {
+	fn decode(data: &[u8]) -> Result<Self, ()> {
 		let mb: Result<MerkleBlock, bitcoin::consensus::encode::Error> = bitcoin::consensus::deserialize(&data);
 		if let Ok(mb) = mb {
 			let proof = Proof::MerkleBlock(mb);
