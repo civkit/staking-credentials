@@ -20,6 +20,7 @@ use bitcoin::consensus::serialize;
 use bitcoin::secp256k1::PublicKey;
 use bitcoin::secp256k1::ecdsa::Signature;
 
+use bitcoin::MerkleBlock;
 
 use crate::common::utils::{Credentials, Proof};
 
@@ -30,7 +31,7 @@ pub trait Encodable {
 }
 
 pub trait Decodable: Sized {
-	fn decode<R: io::Read + ?Sized>(reader: &mut R) -> Result<Self, io::Error>;
+	fn decode<R: io::Read + ?Sized>(data: &[u8]) -> Result<Self, ()>;
 }
 
 /// A set of flags bits for scarce assets proofs accepted.
@@ -126,11 +127,20 @@ impl Encodable for CredentialAuthenticationPayload {
 	}
 }
 
-//impl Decodable for CredentialAuthenticationPayload {
-//	fn decode<R: io::Read + ?Sized>(r: &mut R) -> Result<Self, encode::Error> {
-//		let mb: MerkleBlock = deserialize(&r);
-//		//let proof: = deserialize(&r)
-	
+impl Decodable for CredentialAuthenticationPayload {
+	fn decode<R: io::Read + ?Sized>(data: &[u8]) -> Result<Self, ()> {
+		let mb: Result<MerkleBlock, bitcoin::consensus::encode::Error> = bitcoin::consensus::deserialize(&data);
+		if let Ok(mb) = mb {
+			let proof = Proof::MerkleBlock(mb);
+			//TODO: deserialize credentials
+			return Ok(CredentialAuthenticationPayload {
+				proof,
+				credentials: vec![],
+			})
+		}
+		return Err(());
+	}
+}
 
 /// A credential authentication result sent by a peer.
 pub struct CredentialAuthenticationResult {
