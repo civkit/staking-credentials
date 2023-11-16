@@ -25,6 +25,7 @@ use bitcoin::MerkleBlock;
 use crate::common::utils::{Credentials, Proof};
 
 use std::io;
+use core::fmt::Write;
 
 pub trait Encodable {
 	fn encode<W: io::Write + ?Sized>(&self, writer: &mut W) -> Result<usize, io::Error>;
@@ -32,6 +33,10 @@ pub trait Encodable {
 
 pub trait Decodable: Sized {
 	fn decode(data: &[u8]) -> Result<Self, ()>;
+}
+
+pub trait ToHex {
+	fn to_hex(&self) -> String;
 }
 
 /// A set of flags bits for scarce assets proofs accepted.
@@ -111,6 +116,16 @@ impl CredentialAuthenticationPayload {
 			proof,
 			credentials,
 		}
+	}
+}
+
+impl ToHex for [u8] {
+	fn to_hex(&self) -> String {
+		let mut ret = String::with_capacity(2 * self.len());
+		for ch in self {
+			write!(ret, "{:02x}", ch).expect("writing to string");
+		}
+		ret
 	}
 }
 
@@ -200,7 +215,7 @@ mod test {
 	use bitcoin::secp256k1::{ecdsa, Message, PublicKey, Secp256k1, SecretKey};
 
 	use crate::common::utils::{Credentials, Proof};
-	use crate::common::msgs::{CredentialAuthenticationPayload, CredentialAuthenticationResult, ServiceDeliveranceRequest, ServiceDeliveranceResult};
+	use crate::common::msgs::{CredentialAuthenticationPayload, CredentialAuthenticationResult, Encodable as CredentialEncodable, ServiceDeliveranceRequest, ServiceDeliveranceResult, ToHex};
 
 	#[test]
 	fn test_credential_authentication() {
@@ -212,8 +227,10 @@ mod test {
 		let proof = Proof::Txid(txid);
 		let credentials = vec![Credentials([16;32])];
 
+		let mut buffer = vec![];
 		let mut credential_authentication = CredentialAuthenticationPayload::new(proof, credentials);
-		//credential_authentication.encode();
+		credential_authentication.encode(&mut buffer);
+		buffer.to_hex();
 	}
 
 	#[test]
