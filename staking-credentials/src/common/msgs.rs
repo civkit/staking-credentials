@@ -15,6 +15,9 @@
 //! credentials if any.
 //!
 //! A list of `credentials-to-service-unit` per-Provider covered can be attached.
+//!
+//! Serialization methods are from rust-bitcoin libraries, to ensure compatibility
+//! with bitcoin structs from there.
 
 use bitcoin::consensus::serialize;
 use bitcoin::secp256k1::PublicKey;
@@ -38,6 +41,53 @@ pub trait Decodable: Sized {
 pub trait ToHex {
 	fn to_hex(&self) -> String;
 }
+
+pub trait FromHex: Sized {
+	fn from_byte_iter<I>(iter: I) -> Result<Self, ()>
+	where
+	    I: Iterator<Item = Result<u8, ()>> + ExactSizeIterator + DoubleEndedIterator;
+
+	fn from_hex(s: &str) -> Result<Self, ()> { Self::from_byte_iter(HexIterator::new(s)?) }
+}
+
+pub struct HexIterator<'a> {
+	iter: std::str::Bytes<'a>,
+}
+
+impl <'a> HexIterator<'a> {
+	pub fn new(s: &'a str) -> Result<HexIterator<'a>, ()> {
+		if s.len() % 2 != 0 {
+			Err(())
+		} else {
+			Ok(HexIterator { iter: s.bytes() })
+		}
+	}
+}
+
+fn chars_to_hex(hi: u8, lo: u8) -> Result<u8, ()> {
+	let hih = (hi as char).to_digit(16).ok_or(())?;
+	let loh = (lo as char).to_digit(16).ok_or(())?;
+
+	let ret = (hih << 4) + loh;
+	Ok(ret as u8)
+}
+
+impl<'a> Iterator for HexIterator<'a> {
+	type Item = Result<u8, ()>;
+
+	fn next(&mut self) -> Option<Result<u8, ()>> {
+		let hi = self.iter.next()?;
+		let lo = self.iter.next().unwrap();
+		Some(chars_to_hex(hi, lo))
+	}
+
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		let (min, max) = self.iter.size_hint();
+		(min / 2, max.map(|x| x / 2))
+	}
+}
+
+
 
 /// A set of flags bits for scarce assets proofs accepted.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -129,6 +179,25 @@ impl ToHex for [u8] {
 	}
 }
 
+impl<'a> DoubleEndedIterator for HexIterator<'a> {
+	fn next_back(&mut self) -> Option<Result<u8, ()>> {
+		let lo = self.iter.next_back()?;
+		let hi = self.iter.next_back().unwrap();
+		Some(chars_to_hex(hi, lo))
+	}
+}
+
+impl<'a> ExactSizeIterator for HexIterator<'a> {}
+
+impl FromHex for Vec<u8> {
+	fn from_byte_iter<I>(iter: I) -> Result<Self, ()>
+	where
+	    I: Iterator<Item = Result<u8, ()>> + ExactSizeIterator + DoubleEndedIterator,
+	{
+		iter.collect()
+	}
+}
+
 impl Encodable for CredentialAuthenticationPayload {
 	fn encode<W: io::Write + ?Sized>(&self, w: &mut W) -> Result<usize, io::Error> {
 		let mut len = match &self.proof {
@@ -215,7 +284,7 @@ mod test {
 	use bitcoin::secp256k1::{ecdsa, Message, PublicKey, Secp256k1, SecretKey};
 
 	use crate::common::utils::{Credentials, Proof};
-	use crate::common::msgs::{CredentialAuthenticationPayload, CredentialAuthenticationResult, Encodable as CredentialEncodable, ServiceDeliveranceRequest, ServiceDeliveranceResult, ToHex};
+	use crate::common::msgs::{CredentialAuthenticationPayload, CredentialAuthenticationResult, Encodable as CredentialEncodable, ServiceDeliveranceRequest, ServiceDeliveranceResult, FromHex, ToHex};
 
 	#[test]
 	fn test_credential_authentication() {
@@ -230,7 +299,10 @@ mod test {
 		let mut buffer = vec![];
 		let mut credential_authentication = CredentialAuthenticationPayload::new(proof, credentials);
 		credential_authentication.encode(&mut buffer);
-		buffer.to_hex();
+		let copy_bytes = buffer.clone();
+		let hex_string = buffer.to_hex();
+		let bytes = Vec::from_hex(&hex_string).unwrap();
+		assert_eq!(copy_bytes, bytes);
 	}
 
 	#[test]
