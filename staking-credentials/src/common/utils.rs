@@ -11,6 +11,7 @@
 
 use bitcoin::{Txid, MerkleBlock};
 
+#[derive(PartialEq, Debug)]
 pub struct Credentials(pub [u8; 32]);
 
 impl Credentials {
@@ -22,7 +23,7 @@ impl Credentials {
 	}
 }
 
-#[derive(Debug)]
+#[derive(PartialEq,Debug)]
 pub enum Proof {
 	Txid(Txid),
 	MerkleBlock(MerkleBlock),
