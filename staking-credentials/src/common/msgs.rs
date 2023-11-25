@@ -27,15 +27,26 @@ use bitcoin::MerkleBlock;
 
 use crate::common::utils::{Credentials, Proof};
 
+use std::ops::Deref;
 use std::io;
+use std::io::Read;
 use core::fmt::Write;
 
+#[derive(Debug)]
+pub enum MsgError {
+	MsgType,
+	ProofDeser(bitcoin::consensus::encode::Error),
+	MaxLength,
+	IoError(io::Error),
+}
+
+
 pub trait Encodable {
-	fn encode<W: io::Write + ?Sized>(&self, writer: &mut W) -> Result<usize, io::Error>;
+	fn encode<W: io::Write + ?Sized>(&self, writer: &mut W) -> Result<usize, MsgError>;
 }
 
 pub trait Decodable: Sized {
-	fn decode(data: &[u8]) -> Result<Self, ()>;
+	fn decode<R: io::Read + ?Sized>(data: &mut R) -> Result<Self, MsgError>;
 }
 
 pub trait ToHex {
@@ -199,30 +210,102 @@ impl FromHex for Vec<u8> {
 }
 
 impl Encodable for CredentialAuthenticationPayload {
-	fn encode<W: io::Write + ?Sized>(&self, w: &mut W) -> Result<usize, io::Error> {
-		let mut len = match &self.proof {
-			Proof::Txid(txid) => { w.write(&serialize(&txid))? },
-			Proof::MerkleBlock(mb) => { w.write(&serialize(&mb))? },
+	fn encode<W: io::Write + ?Sized>(&self, w: &mut W) -> Result<usize, MsgError> {
+
+		let mut len = 0;
+		// "staking credentials" msg type"
+		let msg_type = 0;
+		len += w.write(&[msg_type]).unwrap();
+
+		//TODO: add a byte for the type of proofs ?
+		let serialized_proof = match &self.proof {
+			Proof::Txid(txid) => { serialize(&txid) },
+			Proof::MerkleBlock(mb) => { serialize(&mb) },
 		};
+		let size_bytes = serialized_proof.len().to_be_bytes();
+
+		len += w.write(&size_bytes).unwrap();
+		len += w.write(&serialized_proof).unwrap();
+
+		let size_bytes = self.credentials.len().to_be_bytes();
+		len += w.write(&size_bytes).unwrap();
+
 		for c in &self.credentials {
-			len += w.write(&c.serialize())?;
+			let credentials_bytes = c.serialize();
+			len += w.write(&credentials_bytes).unwrap();
 		}
 		Ok(len)
 	}
 }
 
 impl Decodable for CredentialAuthenticationPayload {
-	fn decode(data: &[u8]) -> Result<Self, ()> {
-		let mb: Result<MerkleBlock, bitcoin::consensus::encode::Error> = bitcoin::consensus::deserialize(&data);
-		if let Ok(mb) = mb {
-			let proof = Proof::MerkleBlock(mb);
-			//TODO: deserialize credentials
-			return Ok(CredentialAuthenticationPayload {
-				proof,
-				credentials: vec![],
-			})
+	fn decode<R: io::Read + ?Sized>(reader: &mut R) -> Result<Self, MsgError> {
+
+		let mut buf_msg_type_byte = [0; 1];
+		reader.read_exact(&mut buf_msg_type_byte);
+
+		if buf_msg_type_byte[0] != 0 { return Err(MsgError::MsgType); }
+
+		let mut buf_sizes_bytes = [0; 8];
+		reader.read_exact(&mut buf_sizes_bytes);
+
+		let value = usize::from_be_bytes(buf_sizes_bytes);
+
+		// Be more robust on max size of merkle block
+		if value > 10_000 { return Err(MsgError::MaxLength) };
+
+		let mut buf_proof_bytes = Vec::new();
+		buf_proof_bytes.resize(value, 0);
+		reader.read_exact(&mut buf_proof_bytes);
+
+
+		let mb: Result<MerkleBlock, bitcoin::consensus::encode::Error> = bitcoin::consensus::deserialize(&buf_proof_bytes);
+		let mb_proof = match mb {
+			Ok(mb) => { Proof::MerkleBlock(mb) },
+			Err(err) => { return Err(MsgError::ProofDeser(err)); },
+		};
+
+		let mut buf_sizes_bytes = [0; 8];
+		reader.read_exact(&mut buf_sizes_bytes);
+
+		let value = usize::from_be_bytes(buf_sizes_bytes);
+
+		let mut credentials = Vec::with_capacity(value);
+
+		for i in 0..value {
+			let mut buf_credential = [0; 32];
+			reader.read_exact(&mut buf_credential);
+			credentials.push(Credentials(buf_credential));
 		}
-		return Err(());
+
+		Ok(CredentialAuthenticationPayload {
+			proof: mb_proof,
+			credentials: credentials,
+		})
+	}
+}
+
+impl Encodable for CredentialAuthenticationResult {
+	fn encode<W: io::Write + ?Sized>(&self, w: &mut W) -> Result<usize, MsgError> {
+		let mut len = 0;
+		let size_bytes = self.signatures.len().to_be_bytes();
+		let size_len_byte = size_bytes.len() as u8;
+		len += w.write(&[size_len_byte]).unwrap();
+		len += w.write(&size_bytes).unwrap();
+		for sig in &self.signatures {
+			len += w.write(&sig.serialize_compact()).unwrap();
+		}
+		Ok(len)
+	}
+}
+
+impl Decodable for CredentialAuthenticationResult {
+	fn decode<R: io::Read + ?Sized>(reader: &mut R) -> Result<Self, MsgError> {
+		let mut buf_size_len_byte = [0; 1];
+		reader.read_exact(&mut buf_size_len_byte);
+
+		//if data.len() !=  { return Err(()); }
+		Err(MsgError::MsgType)
 	}
 }
 
@@ -279,6 +362,7 @@ impl ServiceDeliveranceResult {
 #[cfg(test)]
 mod test {
 	use bitcoin::Txid;
+	use bitcoin::network::message::NetworkMessage::MerkleBlock;
 	use bitcoin::consensus::Encodable;
 	use bitcoin::hashes::{Hash, sha256, HashEngine};
 	use bitcoin::secp256k1::{ecdsa, Message, PublicKey, Secp256k1, SecretKey};
@@ -288,24 +372,38 @@ mod test {
 	use crate::common::msgs::Encodable as CredentialEncodable;
 
 	use std::str::FromStr;
+	use std::iter::zip;
 
 	#[test]
 	fn test_credential_authentication() {
-		let bytes = [32;32];
-		let mut enc = Txid::engine();
-		enc.input(&bytes);
-		let txid = Txid::from_engine(enc);
-
-		let proof = Proof::Txid(txid);
-		let credentials = vec![Credentials([16;32])];
+		let mb_bytes = Vec::from_hex("01000000ba8b9cda965dd8e536670f9ddec10e53aab14b20bacad27b913719\
+		0000000000190760b278fe7b8565fda3b968b918d5fd997f993b23674c0af3b6fde300b38f33a5914ce6ed5b\
+		1b01e32f570200000002252bf9d75c4f481ebb6278d708257d1f12beb6dd30301d26c623f789b2ba6fc0e2d3\
+		2adb5f8ca820731dff234a84e78ec30bce4ec69dbd562d0b2b8266bf4e5a0105").unwrap();
+		let mb = bitcoin::consensus::deserialize(&mb_bytes).unwrap();
+		let proof = Proof::MerkleBlock(mb);
+		let credentials = vec![Credentials([16;32]), Credentials([20;32]), Credentials([24;32])];
 
 		let mut buffer = vec![];
 		let mut credential_authentication = CredentialAuthenticationPayload::new(proof, credentials);
 		credential_authentication.encode(&mut buffer);
 		let copy_bytes = buffer.clone();
 		let hex_string = buffer.to_hex();
-		let bytes = Vec::from_hex(&hex_string).unwrap();
+		let mut bytes = Vec::from_hex(&hex_string).unwrap();
 		assert_eq!(copy_bytes, bytes);
+		let mut credential_authentication_decode = CredentialAuthenticationPayload::decode(&mut bytes.deref()).unwrap();
+
+		assert_eq!(credential_authentication.proof, credential_authentication_decode.proof);
+		assert_eq!(credential_authentication.credentials.len(), credential_authentication_decode.credentials.len());
+		let mut credentials_iter = zip(credential_authentication.credentials, credential_authentication_decode.credentials);
+	
+		for (left, right) in credentials_iter {
+			assert_eq!(left, right);
+		}
+
+		// We test serialization deserialization of regtest merkle block.
+		let bytes = Vec::from_hex("0000002006226e46111a0b59caaf126043eb5bbf28c34f3a5e332a1fc7b2b73cf188910f441a4f6750cce9e7b80d22a314d107abd8a50bf7b9bd60cc74acba1260b4df487c584d65ffff7f20000000000100000001441a4f6750cce9e7b80d22a314d107abd8a50bf7b9bd60cc74acba1260b4df480101000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f").unwrap();
+		if let Err(_) = CredentialAuthenticationPayload::decode(&mut bytes.deref()) {}
 	}
 
 	#[test]
