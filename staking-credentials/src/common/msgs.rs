@@ -20,7 +20,7 @@
 //! with bitcoin structs from there.
 
 use bitcoin::consensus::serialize;
-use bitcoin::secp256k1::PublicKey;
+use bitcoin::secp256k1::{Error, PublicKey};
 use bitcoin::secp256k1::ecdsa::Signature;
 
 use bitcoin::MerkleBlock;
@@ -38,6 +38,7 @@ pub enum MsgError {
 	ProofDeser(bitcoin::consensus::encode::Error),
 	MaxLength,
 	IoError(io::Error),
+	Secp256k1(bitcoin::secp256k1::Error),
 }
 
 
@@ -270,6 +271,8 @@ impl Decodable for CredentialAuthenticationPayload {
 
 		let value = usize::from_be_bytes(buf_sizes_bytes);
 
+		if value > 10_000 { return Err(MsgError::MaxLength) };
+
 		let mut credentials = Vec::with_capacity(value);
 
 		for i in 0..value {
@@ -287,25 +290,54 @@ impl Decodable for CredentialAuthenticationPayload {
 
 impl Encodable for CredentialAuthenticationResult {
 	fn encode<W: io::Write + ?Sized>(&self, w: &mut W) -> Result<usize, MsgError> {
+
 		let mut len = 0;
+		// "staking credentials msg type"
+		let msg_type = 1;
+		len += w.write(&[msg_type]).unwrap();
+
 		let size_bytes = self.signatures.len().to_be_bytes();
-		let size_len_byte = size_bytes.len() as u8;
-		len += w.write(&[size_len_byte]).unwrap();
 		len += w.write(&size_bytes).unwrap();
-		for sig in &self.signatures {
-			len += w.write(&sig.serialize_compact()).unwrap();
+
+		for s in &self.signatures {
+			let signature_bytes = s.serialize_der();
+			len += w.write(&signature_bytes).unwrap();
 		}
+
 		Ok(len)
 	}
 }
 
 impl Decodable for CredentialAuthenticationResult {
 	fn decode<R: io::Read + ?Sized>(reader: &mut R) -> Result<Self, MsgError> {
-		let mut buf_size_len_byte = [0; 1];
-		reader.read_exact(&mut buf_size_len_byte);
 
-		//if data.len() !=  { return Err(()); }
-		Err(MsgError::MsgType)
+		let mut buf_msg_type_byte = [0; 1];
+		reader.read_exact(&mut buf_msg_type_byte);
+
+		if buf_msg_type_byte[0] != 1 { return Err(MsgError::MsgType); }
+
+		let mut buf_sizes_bytes = [0; 8];
+		reader.read_exact(&mut buf_sizes_bytes);
+
+		let value = usize::from_be_bytes(buf_sizes_bytes);
+
+		if value > 10_000 { return Err(MsgError::MaxLength) };
+
+		let mut signatures = Vec::with_capacity(value);
+
+		for i in 0..value {
+			let mut buf_signature = [0; 64];
+			reader.read_exact(&mut buf_signature);
+			let sig_ret = Signature::from_compact(&buf_signature);
+			match sig_ret {
+				Ok(sig) => { signatures.push(sig); },
+				Err(e) => { return Err(MsgError::Secp256k1(e)) },
+			}
+		}
+
+		Ok(CredentialAuthenticationResult {
+			signatures,
+		})
 	}
 }
 
