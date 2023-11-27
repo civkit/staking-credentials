@@ -39,6 +39,7 @@ pub enum MsgError {
 	MaxLength,
 	IoError(io::Error),
 	Secp256k1(bitcoin::secp256k1::Error),
+	EndofBuffer,
 }
 
 
@@ -243,12 +244,12 @@ impl Decodable for CredentialAuthenticationPayload {
 	fn decode<R: io::Read + ?Sized>(reader: &mut R) -> Result<Self, MsgError> {
 
 		let mut buf_msg_type_byte = [0; 1];
-		reader.read_exact(&mut buf_msg_type_byte);
+		if let Err(_) = reader.read_exact(&mut buf_msg_type_byte) { return Err(MsgError::EndofBuffer); }
 
 		if buf_msg_type_byte[0] != 0 { return Err(MsgError::MsgType); }
 
 		let mut buf_sizes_bytes = [0; 8];
-		reader.read_exact(&mut buf_sizes_bytes);
+		if let Err(_) = reader.read_exact(&mut buf_sizes_bytes) { return Err(MsgError::EndofBuffer); }
 
 		let value = usize::from_be_bytes(buf_sizes_bytes);
 
@@ -257,7 +258,7 @@ impl Decodable for CredentialAuthenticationPayload {
 
 		let mut buf_proof_bytes = Vec::new();
 		buf_proof_bytes.resize(value, 0);
-		reader.read_exact(&mut buf_proof_bytes);
+		if let Err(_) = reader.read_exact(&mut buf_proof_bytes) { return Err(MsgError::EndofBuffer); }
 
 
 		let mb: Result<MerkleBlock, bitcoin::consensus::encode::Error> = bitcoin::consensus::deserialize(&buf_proof_bytes);
@@ -267,7 +268,7 @@ impl Decodable for CredentialAuthenticationPayload {
 		};
 
 		let mut buf_sizes_bytes = [0; 8];
-		reader.read_exact(&mut buf_sizes_bytes);
+		if let Err(_) = reader.read_exact(&mut buf_sizes_bytes) { return Err(MsgError::EndofBuffer); }
 
 		let value = usize::from_be_bytes(buf_sizes_bytes);
 
@@ -275,9 +276,9 @@ impl Decodable for CredentialAuthenticationPayload {
 
 		let mut credentials = Vec::with_capacity(value);
 
-		for i in 0..value {
+		for _i in 0..value {
 			let mut buf_credential = [0; 32];
-			reader.read_exact(&mut buf_credential);
+			if let Err(_) = reader.read_exact(&mut buf_credential) { return Err(MsgError::EndofBuffer); }
 			credentials.push(Credentials(buf_credential));
 		}
 
@@ -312,12 +313,12 @@ impl Decodable for CredentialAuthenticationResult {
 	fn decode<R: io::Read + ?Sized>(reader: &mut R) -> Result<Self, MsgError> {
 
 		let mut buf_msg_type_byte = [0; 1];
-		reader.read_exact(&mut buf_msg_type_byte);
+		if let Err(_) = reader.read_exact(&mut buf_msg_type_byte) { return Err(MsgError::EndofBuffer); }
 
 		if buf_msg_type_byte[0] != 1 { return Err(MsgError::MsgType); }
 
 		let mut buf_sizes_bytes = [0; 8];
-		reader.read_exact(&mut buf_sizes_bytes);
+		if let Err(_) = reader.read_exact(&mut buf_sizes_bytes) { return Err(MsgError::EndofBuffer); }
 
 		let value = usize::from_be_bytes(buf_sizes_bytes);
 
@@ -325,9 +326,9 @@ impl Decodable for CredentialAuthenticationResult {
 
 		let mut signatures = Vec::with_capacity(value);
 
-		for i in 0..value {
+		for _i in 0..value {
 			let mut buf_signature = [0; 64];
-			reader.read_exact(&mut buf_signature);
+			if let Err(_) = reader.read_exact(&mut buf_signature) { return Err(MsgError::EndofBuffer); }
 			let sig_ret = Signature::from_compact(&buf_signature);
 			match sig_ret {
 				Ok(sig) => { signatures.push(sig); },
@@ -359,18 +360,95 @@ impl CredentialAuthenticationResult {
 pub struct ServiceDeliveranceRequest {
 	pub credentials: Vec<Credentials>,
 	pub signatures: Vec<Signature>,
-	pub service_id: u64,
-	pub commitment_sig: Signature,
+	pub service_id: u64
 }
 
 impl ServiceDeliveranceRequest {
-	pub fn new(credentials: Vec<Credentials>, signatures: Vec<Signature>, service_id: u64, commitment_sig: Signature) -> Self {
+	pub fn new(credentials: Vec<Credentials>, signatures: Vec<Signature>, service_id: u64) -> Self {
 		ServiceDeliveranceRequest {
 			credentials,
 			signatures,
 			service_id,
-			commitment_sig
 		}
+	}
+}
+
+impl Encodable for ServiceDeliveranceRequest {
+	fn encode<W: io::Write + ?Sized>(&self, w: &mut W) -> Result<usize, MsgError> {
+
+		let mut len = 0;
+		// "staking credentials msg type"
+		let msg_type = 2;
+		len += w.write(&[msg_type]).unwrap();
+
+		let size_bytes = self.credentials.len().to_be_bytes();
+		len += w.write(&size_bytes).unwrap();
+
+		for c in &self.credentials {
+			let credential_bytes = c.serialize();
+			len += w.write(&credential_bytes).unwrap();
+		}
+
+		let size_bytes = self.signatures.len().to_be_bytes();
+		len += w.write(&size_bytes).unwrap();
+
+		for s in &self.signatures {
+			let signature_bytes = s.serialize_der();
+			len += w.write(&signature_bytes).unwrap();
+		}
+
+		let service_id_bytes = self.service_id.to_be_bytes();
+		len += w.write(&service_id_bytes).unwrap();
+
+		Ok(len)
+	}
+}
+
+impl Decodable for ServiceDeliveranceRequest {
+	fn decode<R: io::Read + ?Sized>(reader: &mut R) -> Result<Self, MsgError> {
+
+		let mut buf_msg_type_byte = [0; 1];
+		if let Err(_) = reader.read_exact(&mut buf_msg_type_byte) { return Err(MsgError::EndofBuffer); }
+
+		if buf_msg_type_byte[0] != 2 { return Err(MsgError::MsgType); }
+
+		let mut buf_sizes_bytes = [0; 8];
+		if let Err(_) = reader.read_exact(&mut buf_sizes_bytes) { return Err(MsgError::EndofBuffer); }
+
+		let value = usize::from_be_bytes(buf_sizes_bytes);
+
+		if value > 10_000 { return Err(MsgError::MaxLength) };
+
+		let mut credentials = Vec::with_capacity(value);
+
+		for _i in 0..value {
+			let mut buf_credential = [0; 32];
+			if let Err(_) = reader.read_exact(&mut buf_credential) { return Err(MsgError::EndofBuffer); }
+			credentials.push(Credentials(buf_credential));
+		}
+
+		let mut signatures = Vec::with_capacity(value);
+
+		for _i in 0..value {
+			let mut buf_signature = [0; 64];
+			if let Err(_) = reader.read_exact(&mut buf_signature) { return Err(MsgError::EndofBuffer); }
+			let sig_ret = Signature::from_compact(&buf_signature);
+			match sig_ret {
+				Ok(sig) => { signatures.push(sig); },
+				Err(e) => { return Err(MsgError::Secp256k1(e)) },
+			}
+		}
+
+		let mut buf_service_id = [0; 8];
+		if let Err(_) = reader.read_exact(&mut buf_service_id) { return Err(MsgError::EndofBuffer); }
+
+		let service_id = u64::from_be_bytes(buf_service_id);
+
+		Ok(ServiceDeliveranceRequest {
+			credentials: credentials,
+			signatures: signatures,
+			service_id: service_id,
+		})
 	}
 }
 
@@ -378,18 +456,59 @@ impl ServiceDeliveranceRequest {
 pub struct ServiceDeliveranceResult {
 	pub service_id: u64,
 	pub ret: bool,
-	pub reason: Vec<u8>,
 }
 
 impl ServiceDeliveranceResult {
-	pub fn new(service_id: u64, ret: bool, reason: Vec<u8>) -> Self {
+	pub fn new(service_id: u64, ret: bool) -> Self {
 		ServiceDeliveranceResult {
 			service_id,
 			ret,
-			reason
 		}
 	}
 }
+
+impl Encodable for ServiceDeliveranceResult {
+	fn encode<W: io::Write + ?Sized>(&self, w: &mut W) -> Result<usize, MsgError> {
+
+		let mut len = 0;
+		// "staking credentials msg type"
+		let msg_type = 3;
+		len += w.write(&[msg_type]).unwrap();
+
+		let service_id_bytes = self.service_id.to_be_bytes();
+		len += w.write(&service_id_bytes).unwrap();
+
+		let ret_byte = self.ret as u8;
+		len += w.write(&[ret_byte]).unwrap();
+
+		Ok(len)
+	}
+}
+
+impl Decodable for ServiceDeliveranceResult {
+	fn decode<R: io::Read + ?Sized>(reader: &mut R) -> Result<Self, MsgError> {
+
+		let mut buf_msg_type_byte = [0; 1];
+		if let Err(_) = reader.read_exact(&mut buf_msg_type_byte) { return Err(MsgError::EndofBuffer); }
+
+		if buf_msg_type_byte[0] != 3 { return Err(MsgError::MsgType); }
+
+		let mut buf_service_id = [0; 8];
+		if let Err(_) = reader.read_exact(&mut buf_service_id) { return Err(MsgError::EndofBuffer); }
+
+		let service_id = u64::from_be_bytes(buf_service_id);
+
+		let mut ret_byte = [0; 1];
+		if let Err(_) = reader.read_exact(&mut ret_byte) { return Err(MsgError::EndofBuffer); }
+		let ret = ret_byte[0] != 0;
+
+		Ok(ServiceDeliveranceResult {
+			service_id,
+			ret
+		})
+	}
+}
+
 
 #[cfg(test)]
 mod test {
@@ -464,18 +583,15 @@ mod test {
 		let msg = Message::from_slice(hash_msg.as_ref()).unwrap();
 		let seckey = SecretKey::from_slice(&seckey).unwrap();
 
-		let commitment_sig = secp.sign_ecdsa(&msg, &seckey);
-
-		let mut service_deliverance_request = ServiceDeliveranceRequest::new(credentials, signatures, service_id, commitment_sig);
+		let mut service_deliverance_request = ServiceDeliveranceRequest::new(credentials, signatures, service_id);
 	}
 
 	#[test]
 	fn test_service_deliverance_result() {
 		let service_id = 0;
 		let ret = false;
-		let reason = vec![];
 
-		let mut service_deliverance_result = ServiceDeliveranceResult::new(service_id, ret, reason);
+		let mut service_deliverance_result = ServiceDeliveranceResult::new(service_id, ret);
 	}
 
 	#[test]
