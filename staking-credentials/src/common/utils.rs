@@ -11,7 +11,7 @@
 
 use bitcoin::{Txid, MerkleBlock};
 
-#[derive(PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Credentials(pub [u8; 32]);
 
 impl Credentials {
