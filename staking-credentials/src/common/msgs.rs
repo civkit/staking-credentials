@@ -301,7 +301,7 @@ impl Encodable for CredentialAuthenticationResult {
 		len += w.write(&size_bytes).unwrap();
 
 		for s in &self.signatures {
-			let signature_bytes = s.serialize_der();
+			let signature_bytes = s.serialize_compact();
 			len += w.write(&signature_bytes).unwrap();
 		}
 
@@ -393,7 +393,7 @@ impl Encodable for ServiceDeliveranceRequest {
 		len += w.write(&size_bytes).unwrap();
 
 		for s in &self.signatures {
-			let signature_bytes = s.serialize_der();
+			let signature_bytes = s.serialize_compact();
 			len += w.write(&signature_bytes).unwrap();
 		}
 
