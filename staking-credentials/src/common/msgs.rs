@@ -427,9 +427,14 @@ impl Decodable for ServiceDeliveranceRequest {
 			credentials.push(Credentials(buf_credential));
 		}
 
-		let mut signatures = Vec::with_capacity(value);
+		let mut buf_sizes_bytes_sig = [0; 8];
+		let value_sig = usize::from_be_bytes(buf_sizes_bytes_sig);
 
-		for _i in 0..value {
+		if value_sig > 10_000 { return Err(MsgError::MaxLength) };
+
+		let mut signatures = Vec::with_capacity(value_sig);
+
+		for _i in 0..value_sig {
 			let mut buf_signature = [0; 64];
 			if let Err(_) = reader.read_exact(&mut buf_signature) { return Err(MsgError::EndofBuffer); }
 			let sig_ret = Signature::from_compact(&buf_signature);
