@@ -389,8 +389,8 @@ impl Encodable for ServiceDeliveranceRequest {
 			len += w.write(&credential_bytes).unwrap();
 		}
 
-		let size_bytes = self.signatures.len().to_be_bytes();
-		len += w.write(&size_bytes).unwrap();
+		let size_bytes_sig = self.signatures.len().to_be_bytes();
+		len += w.write(&size_bytes_sig).unwrap();
 
 		for s in &self.signatures {
 			let signature_bytes = s.serialize_compact();
@@ -428,6 +428,8 @@ impl Decodable for ServiceDeliveranceRequest {
 		}
 
 		let mut buf_sizes_bytes_sig = [0; 8];
+		if let Err(_) = reader.read_exact(&mut buf_sizes_bytes_sig) { return Err(MsgError::EndofBuffer); }
+
 		let value_sig = usize::from_be_bytes(buf_sizes_bytes_sig);
 
 		if value_sig > 10_000 { return Err(MsgError::MaxLength) };
@@ -522,6 +524,7 @@ mod test {
 	use bitcoin::consensus::Encodable;
 	use bitcoin::hashes::{Hash, sha256, HashEngine};
 	use bitcoin::secp256k1::{ecdsa, Message, PublicKey, Secp256k1, SecretKey};
+	use bitcoin::secp256k1;
 
 	use crate::common::utils::{Credentials, Proof};
 	use crate::common::msgs::*;
@@ -571,24 +574,53 @@ mod test {
 
 	#[test]
 	fn test_service_deliverance_request() {
-		let credentials = vec![];
-		let signatures = vec![];
 		let service_id = 0;
 
 		let secp = Secp256k1::new();
 
-		let msg = b"This is some message";
+		let credentials = vec![Credentials([16;32]), Credentials([20;32]), Credentials([24;32])];
+		let mut signatures = Vec::with_capacity(3);
 
 		let seckey = [
 			59, 148, 11, 85, 134, 130, 61, 253, 2, 174, 59, 70, 27, 180, 51, 107, 94, 203, 174, 253,
 			102, 39, 170, 146, 46, 252, 4, 143, 236, 12, 136, 28,
 		];
 
-		let hash_msg = sha256::Hash::hash(msg);
-		let msg = Message::from_slice(hash_msg.as_ref()).unwrap();
 		let seckey = SecretKey::from_slice(&seckey).unwrap();
 
+		for c in &credentials {
+			let credential_bytes = c.serialize();
+			if let Ok(msg) = secp256k1::Message::from_slice(&credential_bytes[..]) {
+				let sig = secp.sign_ecdsa(&msg, &seckey);
+				signatures.push(sig);
+			}
+		}
+
+		// 1 byte type - 8 bytes of credentials size - 3 * 32 bytes of credentials - 8 bytes of signatures size - 3 * 64 bytes of sig - 8 bytes of service id
 		let mut service_deliverance_request = ServiceDeliveranceRequest::new(credentials, signatures, service_id);
+		let mut buffer = vec![];
+		service_deliverance_request.encode(&mut buffer);
+
+		assert_eq!(buffer.len(), 313);
+
+		let mut service_deliverance_decode = ServiceDeliveranceRequest::decode(&mut buffer.deref()).unwrap();
+		assert_eq!(service_deliverance_request.credentials.len(), service_deliverance_decode.credentials.len());
+
+		let mut credentials_iter = zip(service_deliverance_request.credentials, service_deliverance_decode.credentials);
+	
+		for (left, right) in credentials_iter {
+			assert_eq!(left, right);
+		}
+
+		assert_eq!(service_deliverance_request.signatures.len(), service_deliverance_decode.signatures.len());
+
+		let mut signatures_iter = zip(service_deliverance_request.signatures, service_deliverance_decode.signatures);
+	
+		for (left, right) in signatures_iter {
+			assert_eq!(left, right);
+		}
+
+		assert_eq!(service_deliverance_request.service_id, service_deliverance_decode.service_id);
 	}
 
 	#[test]
